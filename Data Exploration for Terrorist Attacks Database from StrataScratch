@@ -1,0 +1,130 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Reading the file which is a .tar file
+df = pd.read_csv(r"C:\Users\Prashansa\OneDrive\Documents\portfolio_projects\data\terror_strikes\globalterrorismdb_0718dist.tar.bz2", compression="bz2")
+
+df.columns
+
+final_df = df[['iyear', 'imonth', 'iday', 'country', 'country_txt', 'region', 'region_txt', 'provstate', 'city', 'latitude', 'longitude', 'success', 'suicide', 'attacktype1', 'attacktype1_txt', 'targtype1', 'targtype1_txt', 'targsubtype1', 'targsubtype1_txt', 'corp1', 'target1', 'natlty1', 'natlty1_txt', 'gname', 'gsubname', 'motive', 'nperps', 'weaptype1', 'weaptype1_txt', 'nkill', 'nkillus']]
+
+grouped = final_df.groupby('iyear').size().reset_index()
+grouped.columns = ['year', 'count']
+
+# Plotting Terrorist Attacks over the Years
+fig, ax = plt.subplots(figsize = (20,10))
+year_of_attack = grouped['year']
+number_of_attacks = grouped['count']
+x = range(len(year_of_attack))
+ax.bar(x,number_of_attacks)
+ax.set_xticks(x)
+ax.set_xticklabels(year_of_attack)
+ax.set_xlabel('Year of Terrorist Attacks')
+ax.set_ylabel('Number of Attacks')
+ax.set_title('Terrorist Attacks over the Years')
+plt.xticks(rotation = 90)
+plt.show()
+
+grouped_1 = final_df.groupby(['iyear','success']).size().unstack().fillna(0)
+
+# Plotting stacked bar chart of the attacks over the years
+years = grouped_1.index
+num_categories = grouped_1.shape[1]
+colors = ['tab:green', 'tab:red']
+fig, ax = plt.subplots()
+for i in range(num_categories):
+    category = grouped_1.columns[i]
+    ax.bar(years, grouped_1[category], bottom = grouped_1.iloc[:,:i].sum(axis=1), color = colors[i], label = category)
+plt.xlabel('Year')
+plt.ylabel('Number of Attacks')
+plt.title('Number of Successful and Unsucessful Attacks per Year')
+legend_labels = ['Unsuccessful Attacks', 'Successful Attacks']
+legend_markers = [plt.Rectangle((0,0), 1, 1, color = color) for color in colors]
+plt.legend(legend_markers, legend_labels)
+plt.show()
+
+grouped_2 = final_df.groupby('country_txt').size().reset_index()
+grouped_2.columns = ['country', 'count_attacks']
+
+# Plotting maps
+import geopandas as gpd
+# Downloading shapefile for country boundaries
+world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+merged_data = world.merge(grouped_2, left_on = 'name', right_on = 'country', how = 'left')
+fig, ax = plt.subplots(figsize = (24,16))
+world.plot(ax=ax, color = 'lightgray')
+merged_data['Density'] = merged_data['count_attacks']/merged_data['geometry'].area
+merged_data.plot(column = 'Density', ax=ax, cmap='tab20b_r', linewidth = 0.8, edgecolor = '0.8', legend = True)
+ax.set_title('Number of Terror Attacks around the World')
+plt.show()
+
+grouped_3 = final_df.groupby(['country_txt','targtype1_txt']).size().unstack().fillna(0)
+col_sum = grouped_3.sum()
+sum_row = pd.DataFrame(col_sum).T
+grouped_3 = pd.concat([grouped_3,sum_row])
+
+highest_attacks = grouped_3.max().idxmax()
+print("The most attacks have taken place in the {} category.".format(highest_attacks))
+lowest_attacks = grouped_3.min().idxmin()
+print("The least attacks have taken place in the {} category.".format(lowest_attacks))
+country_highest_attacks = grouped_3['Private Citizens & Property'].iloc[:204].idxmax()
+print("The country with the most number of terror attacks on {} is {}".format(highest_attacks, country_highest_attacks))
+country_lowest_attacks = grouped_3['Abortion Related'].iloc[:205].idxmin()
+print("The country with the least number of terror attacks on {} is {}".format(lowest_attacks, country_lowest_attacks))
+
+grouped_4 = final_df.groupby('country_txt')['nkill'].size().reset_index()
+grouped_4.columns = ['country', 'no_people_killed']
+
+# Plotting the number of people killed on the map
+merged_data_1 = world.merge(grouped_4, left_on = 'name', right_on='country', how = 'left')
+fig2, ax2 = plt.subplots(figsize = (24,18))
+world.plot(ax = ax2, color = 'lightgray')
+merged_data_1.plot(column = 'no_people_killed', ax = ax2, cmap = 'Reds', linewidth = 0.8, edgecolor = '0.8', legend = True)
+ax2.set_title("Number of people killed in terror attacks worldwide")
+plt.show()
+
+grouped_5 = final_df.groupby(['iyear','weaptype1_txt']).size().unstack().fillna(0)
+col_sum1 = grouped_5.sum()
+sum_row1 = pd.DataFrame(col_sum1).T
+grouped_5 = pd.concat([grouped_5,sum_row1])
+
+most_used_weapon = grouped_5.max().idxmax()
+print("The most common weapon used for terror attacks are {}".format(most_used_weapon))
+
+# Data Exploration for the USA
+filtered_df = final_df[final_df['country_txt'] == 'United States']
+
+grouped_6 = filtered_df.groupby('targtype1_txt').size().reset_index()
+grouped_6.columns = ['target', 'count']
+plt.figure(figsize=(20,10))
+plt.bar(grouped_6['target'], grouped_6['count'])
+plt.xlabel('Type of Target')
+plt.xticks(rotation = 90)
+plt.ylabel('Number of attacks')
+plt.title("Number of Targets Attacked in the USA")
+
+usa = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+usa = usa[usa['name'] == 'United States of America']
+print(usa)
+geometry = gpd.points_from_xy(filtered_df['longitude'], filtered_df['latitude'])
+gdf = gpd.GeoDataFrame(filtered_df, geometry=geometry)
+fig3, ax3 = plt.subplots(figsize = (24,20))
+usa.plot(ax=ax3, color = 'lightgray')
+gdf.plot(ax=ax3, marker = 'o', color = 'red', markersize = 10)
+ax3.set_title('Map of the USA where Terror Attacks have taken place')
+plt.show()
+
+usa_1 = gpd.read_file(r"C:\Users\Prashansa\OneDrive\Documents\portfolio_projects\data\terror_strikes\tl_2017_us_state.shp")
+unknown_mask = filtered_df['provstate'] == 'Unknown'
+df_with_unknowns = filtered_df[unknown_mask]
+filtered_df = filtered_df[~unknown_mask]
+filtered_df.dropna(subset = ['provstate'], inplace = True)
+merged_data_5 = usa_1.merge(filtered_df, left_on='NAME', right_on='provstate', how='left')
+plt.title('Number of People Killed in Terror Attacks by State')
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+plt.subplots(figsize = (10, 8))
+merged_data_5.plot(column='nkillus', cmap='YlOrRd', linewidth=0.8, edgecolor='0.8', legend=True)
+plt.show()
